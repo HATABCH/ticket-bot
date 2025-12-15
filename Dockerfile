@@ -13,4 +13,4 @@ COPY ./app /app/app
 # Создаем директорию для базы данных
 RUN mkdir -p /app/app/database/data
 
-CMD ["python", "app/main.py"]
+CMD ["python", "-m", "app.main"]
