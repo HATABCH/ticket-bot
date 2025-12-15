@@ -15,7 +15,7 @@ class Settings:
         admin_ids_str = os.getenv("ADMIN_IDS")
         if not admin_ids_str:
             raise ValueError("ADMIN_IDS is not set in the environment variables.")
-        self.admin_ids: list[int] = [int(admin_id.strip()) for admin_id in admin_ids_str.split(',')]
+        self.admin_ids: list[int] = [int(admin_id) for admin_id in admin_ids_str.split(',') if admin_id.strip()]
 
         # SLA Timer in hours
         self.sla_hours: int = int(os.getenv("SLA_HOURS", 12))
