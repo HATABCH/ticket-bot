@@ -6,6 +6,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import crud
+from app.database.database import get_session
 from app.database.models import TicketStatus
 from app.keyboards import admin_kb
 from app.config import settings
@@ -15,8 +16,8 @@ router = Router()
 router.message.filter(F.from_user.id.in_(settings.admin_ids))
 router.callback_query.filter(F.from_user.id.in_(settings.admin_ids))
 
-async def get_db_session(message: Message) -> AsyncSession:
-    async for session in crud.get_session():
+async def get_db_session() -> AsyncSession:
+    async for session in get_session():
         return session
 
 @router.message(Command("admin"))
@@ -26,7 +27,7 @@ async def admin_menu_handler(message: Message):
 @router.message(F.text == "Открытые тикеты")
 async def open_tickets_handler(message: Message, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
     
     open_tickets = await crud.get_tickets_by_status(session, TicketStatus.OPEN)
     answered_tickets = await crud.get_tickets_by_status(session, TicketStatus.ANSWERED)
@@ -42,7 +43,7 @@ async def open_tickets_handler(message: Message, session: AsyncSession = None):
 @router.message(F.text == "Закрытые тикеты")
 async def closed_tickets_handler(message: Message, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
         
     tickets = await crud.get_tickets_by_status(session, TicketStatus.CLOSED)
     
@@ -55,7 +56,7 @@ async def closed_tickets_handler(message: Message, session: AsyncSession = None)
 @router.callback_query(admin_kb.AdminTicketCallback.filter())
 async def handle_admin_ticket_action(query: CallbackQuery, callback_data: admin_kb.AdminTicketCallback, state: FSMContext, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(query.message)
+        session = await get_db_session()
         
     ticket_id = callback_data.ticket_id
     action = callback_data.action
@@ -101,7 +102,7 @@ async def handle_admin_ticket_action(query: CallbackQuery, callback_data: admin_
 @router.message(AdminState.reply_to_ticket)
 async def process_reply(message: Message, state: FSMContext, bot: Bot, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
 
     data = await state.get_data()
     ticket_id = data.get("ticket_id")
@@ -161,7 +162,7 @@ async def send_direct_message(message: Message, state: FSMContext, bot: Bot):
 @router.message(F.text == "Истекающие подписки")
 async def expiring_subscriptions_handler(message: Message, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
     
     subscriptions = await crud.get_expiring_subscriptions(session, days=7) # Например, за 7 дней
     if not subscriptions:

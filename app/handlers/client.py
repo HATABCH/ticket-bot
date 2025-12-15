@@ -6,21 +6,22 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import crud
+from app.database.database import get_session
 from app.database.models import TicketStatus
 from app.keyboards import client_kb
 from app.config import settings
 
 router = Router()
 
-async def get_db_session(message: Message) -> AsyncSession:
+async def get_db_session() -> AsyncSession:
     # Это простой способ получить сессию, в идеале использовать middleware
-    async for session in crud.get_session():
+    async for session in get_session():
         return session
 
 @router.message(CommandStart())
 async def start_handler(message: Message, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
     
     user = await crud.get_or_create_user(session, message.from_user.id, message.from_user.username)
     await message.answer(f"Здравствуйте, {message.from_user.full_name}!\n\n"
@@ -30,7 +31,7 @@ async def start_handler(message: Message, session: AsyncSession = None):
 @router.message(F.text == "Создать тикет")
 async def create_ticket_handler(message: Message, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
     
     new_ticket = await crud.create_ticket(session, message.from_user.id)
     await crud.set_active_ticket(session, message.from_user.id, new_ticket.id)
@@ -50,7 +51,7 @@ async def create_ticket_handler(message: Message, session: AsyncSession = None):
 @router.message(F.text == "Мои тикеты")
 async def my_tickets_handler(message: Message, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
         
     tickets = await crud.get_user_tickets(session, message.from_user.id)
     if not tickets:
@@ -62,7 +63,7 @@ async def my_tickets_handler(message: Message, session: AsyncSession = None):
 @router.message(F.text.startswith("Активный тикет"))
 async def active_ticket_menu_handler(message: Message, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
         
     active_ticket_id = await crud.get_active_ticket_id(session, message.from_user.id)
     if not active_ticket_id:
@@ -74,7 +75,7 @@ async def active_ticket_menu_handler(message: Message, session: AsyncSession = N
 @router.callback_query(client_kb.TicketCallback.filter(F.action == "view"))
 async def view_ticket_callback(query: CallbackQuery, callback_data: client_kb.TicketCallback, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(query.message)
+        session = await get_db_session()
         
     ticket_id = callback_data.ticket_id
     messages = await crud.get_ticket_messages(session, ticket_id)
@@ -102,7 +103,7 @@ async def view_ticket_callback(query: CallbackQuery, callback_data: client_kb.Ti
 @router.callback_query(client_kb.TicketCallback.filter(F.action == "set_active"))
 async def set_active_ticket_callback(query: CallbackQuery, callback_data: client_kb.TicketCallback, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(query.message)
+        session = await get_db_session()
         
     ticket_id = callback_data.ticket_id
     await crud.set_active_ticket(session, query.from_user.id, ticket_id)
@@ -112,7 +113,7 @@ async def set_active_ticket_callback(query: CallbackQuery, callback_data: client
 @router.callback_query(client_kb.TicketCallback.filter(F.action == "close"))
 async def close_ticket_callback(query: CallbackQuery, callback_data: client_kb.TicketCallback, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(query.message)
+        session = await get_db_session()
 
     ticket_id = callback_data.ticket_id
     await crud.update_ticket_status(session, ticket_id, TicketStatus.CLOSED)
@@ -130,7 +131,7 @@ async def close_ticket_callback(query: CallbackQuery, callback_data: client_kb.T
 @router.callback_query(client_kb.TicketCallback.filter(F.action == "reopen"))
 async def reopen_ticket_callback(query: CallbackQuery, callback_data: client_kb.TicketCallback, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(query.message)
+        session = await get_db_session()
 
     ticket_id = callback_data.ticket_id
     # Клиент переоткрывает, значит ждем ответа админа
@@ -150,7 +151,7 @@ async def reopen_ticket_callback(query: CallbackQuery, callback_data: client_kb.
 @router.message(F.text == "Срок подписки")
 async def subscription_status_handler(message: Message, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
     
     subscription = await crud.get_user_subscription(session, message.from_user.id)
     if not subscription:
@@ -169,7 +170,7 @@ async def subscription_status_handler(message: Message, session: AsyncSession = 
 @router.message(F.content_type.in_({'text', 'photo', 'video', 'document'}))
 async def handle_message_in_ticket(message: Message, bot: Bot, session: AsyncSession = None):
     if not session:
-        session = await get_db_session(message)
+        session = await get_db_session()
     
     # Игнорируем команды и кнопки главного меню
     if message.text in ["Создать тикет", "Мои тикеты", "Срок подписки"] or message.text.startswith("/"):
