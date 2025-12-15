@@ -4,6 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from aiogram.client.default import DefaultBotProperties
 from app.config import Settings
 from app.database.database import init_db, get_session
 from app.handlers import client, admin
@@ -25,7 +26,7 @@ async def main():
     logger.info("Database initialized.")
 
     # Инициализация бота и диспетчера
-    bot = Bot(token=settings.bot_token, parse_mode="HTML")
+    bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
 

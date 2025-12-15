@@ -30,5 +30,8 @@ async def init_db():
 
 async def get_session() -> AsyncSession:
     """Зависимость для получения сессии базы данных."""
-    async with AsyncSessionFactory() as session:
+    session = AsyncSessionFactory()
+    try:
         yield session
+    finally:
+        await session.close()
