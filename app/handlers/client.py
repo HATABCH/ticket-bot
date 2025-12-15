@@ -144,7 +144,7 @@ async def reopen_ticket_callback(
     async with get_session() as session:
         ticket_id = callback_data.ticket_id
         # Клиент переоткрывает, значит ждем ответа админа
-        await crud.update_ticket_status(session, ticket_id, TicketStatus.ANSWERED)
+        await crud.update_ticket_status(session, ticket_id, TicketStatus.OPEN)
         await crud.set_active_ticket(session, query.from_user.id, ticket_id)
         await query.message.edit_text(
             f"Тикет #{ticket_id} был переоткрыт и установлен как активный."
@@ -229,9 +229,6 @@ async def handle_message_in_ticket(message: Message, bot: Bot):
             text,
             file_id,
         )
-
-        # Меняем статус на "answered", т.к. клиент написал и ждет ответа админа
-        await crud.update_ticket_status(session, active_ticket_id, TicketStatus.ANSWERED)
 
         await message.answer("Ваше сообщение отправлено в поддержку.")
 
