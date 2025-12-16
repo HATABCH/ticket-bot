@@ -10,6 +10,9 @@ from app.database.models import TicketStatus
 from app.keyboards import client_kb, admin_kb
 from app.config import settings
 from app.services.notifications import notify_admins, notify_admins_new_message
+import logging # New import
+
+logger = logging.getLogger(__name__) # New line
 
 router = Router()
 
@@ -81,6 +84,7 @@ async def active_ticket_menu_handler(message: Message):
 async def view_ticket_callback(
     query: CallbackQuery, callback_data: client_kb.TicketCallback
 ):
+    logger.info(f"Client {query.from_user.id} viewing ticket {callback_data.ticket_id}")
     async with get_session() as session:
         ticket_id = callback_data.ticket_id
         messages = await crud.get_ticket_messages(session, ticket_id)
@@ -91,6 +95,7 @@ async def view_ticket_callback(
 
         history = f"<b>История сообщений по тикету #{ticket_id}</b>\n\n"
         for msg in messages:
+            logger.info(f"  Message sender_id: {msg.sender_id}, Bot admin_ids: {query.bot.settings.admin_ids}")
             sender_id = msg.sender_id
             if sender_id == query.from_user.id:
                 sender = "Вы"

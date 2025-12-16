@@ -104,8 +104,11 @@ async def handle_admin_ticket_action(
             ticket = await crud.get_ticket_by_id(session, ticket_id)
             user = await crud.get_user_by_id(session, ticket.owner_id)
 
+            logger.info(f"Admin {query.from_user.id} viewing ticket {ticket_id}. Bot admin_ids: {query.bot.settings.admin_ids}")
+
             history = f"<b>История сообщений по тикету #{ticket_id}</b>\nПользователь: @{user.username} ({user.telegram_id})\nСтатус: {ticket.status.value}\n\n"
             for msg in messages:
+                logger.info(f"  Message sender_id: {msg.sender_id}")
                 sender_id = msg.sender_id
                 if sender_id == user.telegram_id: # user is the ticket owner
                     sender = "Клиент"
@@ -158,8 +161,9 @@ async def handle_admin_ticket_action(
 
 @router.message(AdminState.reply_to_ticket)
 async def process_reply(message: Message, state: FSMContext, bot: Bot):
+    data = await state.get_data() # data needs to be defined before using it
+    logger.info(f"Admin {message.from_user.id} is replying to ticket {data.get('ticket_id')}")
     async with get_session() as session:
-        data = await state.get_data()
         ticket_id = data.get("ticket_id")
         user_id = data.get("user_id")
 
