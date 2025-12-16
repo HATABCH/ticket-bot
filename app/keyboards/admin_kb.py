@@ -15,6 +15,7 @@ def get_admin_main_menu() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="Открытые тикеты"), KeyboardButton(text="Закрытые тикеты")],
             [KeyboardButton(text="Истекающие подписки"), KeyboardButton(text="Написать пользователю")],
+            [KeyboardButton(text="Управление подпиской")]
         ],
         resize_keyboard=True
     )

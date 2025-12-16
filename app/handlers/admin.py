@@ -10,7 +10,8 @@ from app.database.database import get_session
 from app.database.models import TicketStatus
 from app.keyboards import admin_kb
 from app.config import settings
-from app.states.states import AdminState
+from app.states.states import AdminState, ManageSubscription
+from datetime import datetime
 
 router = Router()
 router.message.filter(F.from_user.id.in_(settings.admin_ids))
@@ -20,6 +21,30 @@ router.callback_query.filter(F.from_user.id.in_(settings.admin_ids))
 @router.message(Command("admin"))
 async def admin_menu_handler(message: Message):
     await message.answer("Админ-панель", reply_markup=admin_kb.get_admin_main_menu())
+
+
+@router.message(Command("list"))
+async def list_users_handler(message: Message):
+    async with get_session() as session:
+        users_with_subscriptions = await crud.get_all_users_with_subscriptions(session)
+    
+    if not users_with_subscriptions:
+        await message.answer("Пользователи не найдены.")
+        return
+
+    response_text = "<b>Список пользователей:</b>\n\n"
+    for user, subscription in users_with_subscriptions:
+        end_date_str = subscription.end_date.strftime('%d.%m.%Y') if subscription else "Нет"
+        response_text += f"ID: <code>{user.telegram_id}</code>\n"
+        response_text += f"Username: @{user.username}\n"
+        response_text += f"Подписка до: {end_date_str}\n\n"
+
+    if len(response_text) > 4096:
+        for i in range(0, len(response_text), 4096):
+            await message.answer(response_text[i:i + 4096])
+    else:
+        await message.answer(response_text)
+
 
 
 @router.message(F.text == "Открытые тикеты")
@@ -206,3 +231,45 @@ async def expiring_subscriptions_handler(message: Message):
             response += f"Дата окончания: {sub.end_date.strftime('%d.%m.%Y')}\n\n"
 
         await message.answer(response)
+
+
+@router.message(F.text == "Управление подпиской")
+async def start_manage_subscription(message: Message, state: FSMContext):
+    await state.set_state(ManageSubscription.get_user_id)
+    await message.answer("Введите Telegram ID пользователя для управления подпиской:")
+
+
+@router.message(ManageSubscription.get_user_id)
+async def process_subscription_user_id(message: Message, state: FSMContext):
+    if not message.text.isdigit():
+        await message.answer("ID должен быть числом. Попробуйте снова.")
+        return
+
+    async with get_session() as session:
+        user = await crud.get_user_by_id(session, int(message.text))
+        if not user:
+            await message.answer("Пользователь с таким ID не найден. Попробуйте снова.")
+            return
+
+    await state.update_data(target_user_id=int(message.text))
+    await state.set_state(ManageSubscription.get_end_date)
+    await message.answer("Теперь введите дату окончания подписки в формате ДД-ММ-ГГГГ:")
+
+
+@router.message(ManageSubscription.get_end_date)
+async def process_subscription_end_date(message: Message, state: FSMContext):
+    try:
+        end_date = datetime.strptime(message.text, "%d-%m-%Y")
+    except ValueError:
+        await message.answer("Неверный формат даты. Введите дату в формате ДД-ММ-ГГГГ.")
+        return
+
+    data = await state.get_data()
+    user_id = data.get("target_user_id")
+
+    async with get_session() as session:
+        await crud.create_or_update_subscription(session, user_id, end_date)
+        await message.answer(f"Подписка для пользователя {user_id} успешно обновлена/создана.\n"
+                             f"Дата окончания: {end_date.strftime('%d.%m.%Y')}")
+
+    await state.clear()

@@ -29,6 +29,13 @@ async def get_active_ticket_id(session: AsyncSession, telegram_id: int) -> Optio
     result = await session.execute(select(User.active_ticket_id).where(User.telegram_id == telegram_id))
     return result.scalar_one_or_none()
 
+async def get_all_users_with_subscriptions(session: AsyncSession):
+    result = await session.execute(
+        select(User, Subscription).outerjoin(Subscription, User.telegram_id == Subscription.user_id)
+    )
+    return result.all()
+
+
 # Ticket CRUD
 async def create_ticket(session: AsyncSession, telegram_id: int) -> Ticket:
     new_ticket = Ticket(owner_id=telegram_id, status=TicketStatus.OPEN)
@@ -43,7 +50,10 @@ async def get_ticket_by_id(session: AsyncSession, ticket_id: int) -> Optional[Ti
 
 async def get_user_tickets(session: AsyncSession, telegram_id: int) -> List[Ticket]:
     result = await session.execute(
-        select(Ticket).filter(Ticket.owner_id == telegram_id).order_by(Ticket.last_message_at.desc())
+        select(Ticket).filter(
+            Ticket.owner_id == telegram_id,
+            Ticket.status != TicketStatus.CLOSED
+        ).order_by(Ticket.last_message_at.desc())
     )
     return result.scalars().all()
 
@@ -81,6 +91,17 @@ async def get_ticket_messages(session: AsyncSession, ticket_id: int) -> List[Tic
 async def get_user_subscription(session: AsyncSession, telegram_id: int) -> Optional[Subscription]:
     result = await session.execute(select(Subscription).filter(Subscription.user_id == telegram_id))
     return result.scalar_one_or_none()
+
+async def create_or_update_subscription(session: AsyncSession, user_id: int, end_date: datetime):
+    subscription = await get_user_subscription(session, user_id)
+    if subscription:
+        subscription.end_date = end_date
+    else:
+        subscription = Subscription(user_id=user_id, end_date=end_date)
+        session.add(subscription)
+    await session.commit()
+    return subscription
+
 
 async def get_expiring_subscriptions(session: AsyncSession, days: int) -> List[Subscription]:
     target_date = datetime.utcnow().date() + timedelta(days=days)
