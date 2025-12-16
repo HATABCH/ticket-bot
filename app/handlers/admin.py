@@ -12,6 +12,9 @@ from app.keyboards import admin_kb
 from app.config import settings
 from app.states.states import AdminState, ManageSubscription
 from datetime import datetime
+import logging # New import
+
+logger = logging.getLogger(__name__) # New line
 
 router = Router()
 router.message.filter(F.from_user.id.in_(settings.admin_ids))
@@ -32,18 +35,23 @@ async def list_users_handler(message: Message):
         await message.answer("Пользователи не найдены.")
         return
 
-    response_text = "<b>Список пользователей:</b>\n\n"
+    current_response_part = "<b>Список пользователей:</b>\n\n"
     for user, subscription in users_with_subscriptions:
         end_date_str = subscription.end_date.strftime('%d.%m.%Y') if subscription else "Нет"
-        response_text += f"ID: <code>{user.telegram_id}</code>\n"
-        response_text += f"Username: @{user.username}\n"
-        response_text += f"Подписка до: {end_date_str}\n\n"
-
-    if len(response_text) > 4096:
-        for i in range(0, len(response_text), 4096):
-            await message.answer(response_text[i:i + 4096])
-    else:
-        await message.answer(response_text)
+        user_info = (
+            f"ID: <code>{user.telegram_id}</code>\n"
+            f"Username: @{user.username}\n"
+            f"Подписка до: {end_date_str}\n\n"
+        )
+        
+        if len(current_response_part) + len(user_info) > 4000: # Keep some buffer for HTML tags
+            await message.answer(current_response_part)
+            current_response_part = user_info
+        else:
+            current_response_part += user_info
+    
+    if current_response_part:
+        await message.answer(current_response_part)
 
 
 
@@ -122,18 +130,22 @@ async def handle_admin_ticket_action(
         elif action == "close_ticket":
             await crud.update_ticket_status(session, ticket_id, TicketStatus.CLOSED)
             await query.message.edit_text(f"Тикет #{ticket_id} закрыт.")
-            with contextlib.suppress(Exception):
+            try:
                 await query.bot.send_message(
                     user_id, f"Ваш тикет #{ticket_id} был закрыт администратором."
                 )
+            except Exception as e:
+                logger.error(f"Failed to send ticket close notification to user {user_id} for ticket {ticket_id}: {e}")
 
         elif action == "reopen_ticket":
-            await crud.update_ticket_status(session, ticket_id, TicketStatus.PENDING)
+            await crud.update_ticket_status(session, ticket_id, TicketStatus.OPEN)
             await query.message.edit_text(f"Тикет #{ticket_id} переоткрыт.")
-            with contextlib.suppress(Exception):
+            try:
                 await query.bot.send_message(
                     user_id, f"Ваш тикет #{ticket_id} был переоткрыт администратором."
                 )
+            except Exception as e:
+                logger.error(f"Failed to send ticket reopen notification to user {user_id} for ticket {ticket_id}: {e}")
 
     await query.answer()
 
@@ -164,7 +176,7 @@ async def process_reply(message: Message, state: FSMContext, bot: Bot):
         await message.answer(f"Ваш ответ в тикет #{ticket_id} отправлен.")
 
         # Уведомляем клиента
-        with contextlib.suppress(Exception):
+        try:
             await bot.send_message(
                 user_id, f"Поступил ответ от поддержки в тикете #{ticket_id}"
             )
@@ -173,6 +185,8 @@ async def process_reply(message: Message, state: FSMContext, bot: Bot):
                 from_chat_id=message.chat.id,
                 message_id=message.message_id,
             )
+        except Exception as e:
+            logger.error(f"Failed to send admin reply and copy message to user {user_id} for ticket {ticket_id}: {e}")
 
     await state.clear()
 

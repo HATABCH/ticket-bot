@@ -9,6 +9,7 @@ from app.database.database import get_session
 from app.database.models import TicketStatus
 from app.keyboards import client_kb, admin_kb
 from app.config import settings
+from app.services.notifications import notify_admins, notify_admins_new_message
 
 router = Router()
 
@@ -39,12 +40,10 @@ async def create_ticket_handler(message: Message):
         )
 
         # Уведомление админам
-        for admin_id in settings.admin_ids:
-            with contextlib.suppress(Exception):
-                await message.bot.send_message(
-                    admin_id,
-                    f"Новый тикет #{new_ticket.id} от пользователя @{message.from_user.username} ({message.from_user.id})",
-                )
+        await notify_admins(
+            message.bot,
+            f"Новый тикет #{new_ticket.id} от пользователя @{message.from_user.username} ({message.from_user.id})"
+        )
 
 
 @router.message(F.text == "Мои тикеты")
@@ -129,12 +128,10 @@ async def close_ticket_callback(
         await query.answer("Тикет закрыт.", show_alert=True)
 
         # Уведомление админам
-        for admin_id in settings.admin_ids:
-            with contextlib.suppress(Exception):
-                await query.bot.send_message(
-                    admin_id,
-                    f"Пользователь @{query.from_user.username} закрыл тикет #{ticket_id}",
-                )
+        await notify_admins(
+            query.bot,
+            f"Пользователь @{query.from_user.username} закрыл тикет #{ticket_id}"
+        )
 
 
 @router.callback_query(client_kb.TicketCallback.filter(F.action == "reopen"))
@@ -152,12 +149,10 @@ async def reopen_ticket_callback(
         await query.answer("Тикет переоткрыт.", show_alert=True)
 
         # Уведомление админам
-        for admin_id in settings.admin_ids:
-            with contextlib.suppress(Exception):
-                await query.bot.send_message(
-                    admin_id,
-                    f"Пользователь @{query.from_user.username} переоткрыл тикет #{ticket_id}",
-                )
+        await notify_admins(
+            query.bot,
+            f"Пользователь @{query.from_user.username} переоткрыл тикет #{ticket_id}"
+        )
 
 
 @router.message(F.text == "Срок подписки")
@@ -230,26 +225,10 @@ async def handle_message_in_ticket(message: Message, bot: Bot):
             file_id,
         )
 
+        # Меняем статус, так как клиент ответил
+        await crud.update_ticket_status(session, active_ticket_id, TicketStatus.ANSWERED)
+
         await message.answer("Ваше сообщение отправлено в поддержку.")
 
         # Уведомление для админов
-        for admin_id in settings.admin_ids:
-            with contextlib.suppress(Exception):
-                notification_text = (
-                    f"Новое сообщение в тикете #{active_ticket_id} "
-                    f"от @{message.from_user.username} ({message.from_user.id})"
-                )
-                await bot.send_message(
-                    admin_id,
-                    notification_text,
-                    reply_markup=admin_kb.get_ticket_actions_kb(
-                        active_ticket_id, message.from_user.id
-                    ),
-                )
-
-                # Пересылаем сообщение клиента
-                await bot.copy_message(
-                    chat_id=admin_id,
-                    from_chat_id=message.chat.id,
-                    message_id=message.message_id,
-                )
+        await notify_admins_new_message(message.bot, message, active_ticket_id)

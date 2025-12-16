@@ -1,10 +1,11 @@
 # /Users/mac/projects/ticket_bot/app/services/notifications.py
 import logging
-import contextlib
 from datetime import datetime
 from aiogram import Bot
+from aiogram.types import Message
 from app.database import crud
 from app.database.database import AsyncSessionFactory
+from app.keyboards import admin_kb
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +22,15 @@ async def check_sla(bot: Bot, sla_hours: int):
             for ticket in tickets_to_notify:
                 user = await crud.get_user_by_id(session, ticket.owner_id)
                 for admin_id in bot.settings.admin_ids:
-                    with contextlib.suppress(Exception):
+                    try:
                         await bot.send_message(
                             admin_id,
                             f"⚠️ <b>SLA НАРУШЕНИЕ</b> ⚠️\n\n"
                             f"Тикет #{ticket.id} от пользователя @{user.username} ({user.telegram_id}) "
                             f"ожидает ответа более {sla_hours} часов."
                         )
+                    except Exception as e:
+                        logger.error(f"Failed to send SLA notification to admin {admin_id}: {e}")
             logger.info(f"SLA check complete. Found {len(tickets_to_notify)} violations.")
         except Exception as e:
             logger.error(f"Error during SLA check: {e}")
@@ -55,9 +58,45 @@ async def check_subscriptions(bot: Bot):
                     message = "❗️ Ваша VPN-подписка истекает сегодня. Для продления обратитесь в поддержку."
 
                 if message:
-                    with contextlib.suppress(Exception):
+                    try:
                         await bot.send_message(sub.user_id, message)
+                    except Exception as e:
+                        logger.error(f"Failed to send subscription notification to user {sub.user_id}: {e}")
             
             logger.info(f"Subscription check complete. Notified {len(subscriptions_to_notify)} users.")
         except Exception as e:
             logger.error(f"Error during subscription check: {e}")
+
+
+async def notify_admins(bot: Bot, text: str):
+    """Отправляет текстовое уведомление всем администраторам."""
+    for admin_id in bot.settings.admin_ids:
+        try:
+            await bot.send_message(admin_id, text)
+        except Exception as e:
+            logger.error(f"Failed to send notification to admin {admin_id}: {e}")
+
+
+async def notify_admins_new_message(bot: Bot, message: Message, ticket_id: int):
+    """Уведомляет админов о новом сообщении в тикете."""
+    notification_text = (
+        f"Новое сообщение в тикете #{ticket_id} "
+        f"от @{message.from_user.username} ({message.from_user.id})"
+    )
+    for admin_id in bot.settings.admin_ids:
+        try:
+            await bot.send_message(
+                admin_id,
+                notification_text,
+                reply_markup=admin_kb.get_ticket_actions_kb(
+                    ticket_id, message.from_user.id
+                ),
+            )
+            # Пересылаем сообщение клиента
+            await bot.copy_message(
+                chat_id=admin_id,
+                from_chat_id=message.chat.id,
+                message_id=message.message_id,
+            )
+        except Exception as e:
+            logger.error(f"Failed to send message notification to admin {admin_id}: {e}")
