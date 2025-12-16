@@ -27,6 +27,7 @@ async def main():
 
     # Инициализация бота и диспетчера
     bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
+    bot.settings = settings # Attach settings to the bot object
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
 
