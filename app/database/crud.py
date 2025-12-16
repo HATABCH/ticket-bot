@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update, delete
+from sqlalchemy import update, delete, func
 from app.database.models import User, Ticket, TicketMessage, Subscription, TicketStatus
 from typing import List, Optional
 
