@@ -106,7 +106,15 @@ async def handle_admin_ticket_action(
 
             history = f"<b>История сообщений по тикету #{ticket_id}</b>\nПользователь: @{user.username} ({user.telegram_id})\nСтатус: {ticket.status.value}\n\n"
             for msg in messages:
-                sender = "Клиент" if msg.sender_id == user.telegram_id else "Поддержка"
+                sender_id = msg.sender_id
+                if sender_id == user.telegram_id: # user is the ticket owner
+                    sender = "Клиент"
+                elif sender_id == query.from_user.id: # current viewing admin
+                    sender = "Вы"
+                elif sender_id in query.bot.settings.admin_ids: # another admin
+                    sender = "Другой Администратор"
+                else:
+                    sender = "Неизвестный отправитель" # Fallback
                 time = msg.created_at.strftime("%Y-%m-%d %H:%M")
                 history += f"<u>{sender} ({time}):</u>\n"
                 if msg.message_type == "text":

@@ -91,7 +91,13 @@ async def view_ticket_callback(
 
         history = f"<b>История сообщений по тикету #{ticket_id}</b>\n\n"
         for msg in messages:
-            sender = "Вы" if msg.sender_id == query.from_user.id else "Поддержка"
+            sender_id = msg.sender_id
+            if sender_id == query.from_user.id:
+                sender = "Вы"
+            elif sender_id in query.bot.settings.admin_ids:
+                sender = "Поддержка"
+            else:
+                sender = "Неизвестный отправитель" # Fallback, should ideally not be reached
             time = msg.created_at.strftime("%Y-%m-%d %H:%M")
             history += f"<u>{sender} ({time}):</u>\n"
             if msg.message_type == "text":
