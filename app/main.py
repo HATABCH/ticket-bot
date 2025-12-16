@@ -31,8 +31,8 @@ async def main():
     dp = Dispatcher(storage=storage)
 
     # Регистрация роутеров
-    dp.include_router(client.router)
     dp.include_router(admin.router)
+    dp.include_router(client.router)
     logger.info("Routers included.")
 
     # Настройка и запуск фоновых задач
