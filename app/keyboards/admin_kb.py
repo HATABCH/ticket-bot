@@ -9,6 +9,11 @@ class AdminTicketCallback(CallbackData, prefix="admin_ticket"):
     ticket_id: int
     user_id: int # Добавляем user_id для прямого ответа
 
+class ManageSubscriptionCallback(CallbackData, prefix="manage_sub"):
+    action: str
+    user_id: int
+    months: int = 0
+
 def get_admin_main_menu() -> ReplyKeyboardMarkup:
     """Возвращает клавиатуру главного меню администратора."""
     return ReplyKeyboardMarkup(
@@ -70,6 +75,28 @@ def get_ticket_actions_kb(ticket_id: int, user_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="Переоткрыть тикет",
                 callback_data=AdminTicketCallback(action="reopen_ticket", ticket_id=ticket_id, user_id=user_id).pack()
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_subscription_management_kb(user_id: int) -> InlineKeyboardMarkup:
+    """Возвращает инлайн-клавиатуру для управления подпиской."""
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="Продлить на 1 месяц",
+                callback_data=ManageSubscriptionCallback(action="renew", user_id=user_id, months=1).pack()
+            ),
+            InlineKeyboardButton(
+                text="Продлить на 3 месяца",
+                callback_data=ManageSubscriptionCallback(action="renew", user_id=user_id, months=3).pack()
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Ввести дату вручную",
+                callback_data=ManageSubscriptionCallback(action="manual", user_id=user_id).pack()
             )
         ]
     ]
