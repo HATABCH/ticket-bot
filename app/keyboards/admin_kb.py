@@ -101,3 +101,16 @@ def get_subscription_management_kb(user_id: int) -> InlineKeyboardMarkup:
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_extend_subscription_kb(user_id: int) -> InlineKeyboardMarkup:
+    """Возвращает инлайн-клавиатуру для продления подписки."""
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="Продлить на 1 месяц",
+                callback_data=ManageSubscriptionCallback(action="renew", user_id=user_id, months=1).pack()
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)

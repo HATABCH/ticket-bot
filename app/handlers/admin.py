@@ -12,6 +12,7 @@ from app.keyboards import admin_kb
 from app.config import settings
 from app.states.states import AdminState, ManageSubscription
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import logging # New import
 
 logger = logging.getLogger(__name__) # New line
@@ -269,15 +270,41 @@ async def process_subscription_user_id(message: Message, state: FSMContext):
         await message.answer("ID должен быть числом. Попробуйте снова.")
         return
 
+    user_id = int(message.text)
     async with get_session() as session:
-        user = await crud.get_user_by_id(session, int(message.text))
+        user = await crud.get_user_by_id(session, user_id)
         if not user:
             await message.answer("Пользователь с таким ID не найден. Попробуйте снова.")
             return
 
-    await state.update_data(target_user_id=int(message.text))
+    await state.update_data(target_user_id=user_id)
     await state.set_state(ManageSubscription.get_end_date)
-    await message.answer("Теперь введите дату окончания подписки в формате ДД-ММ-ГГГГ:")
+    await message.answer(
+        "Теперь введите дату окончания подписки в формате ДД-ММ-ГГГГ:",
+        reply_markup=admin_kb.get_extend_subscription_kb(user_id)
+    )
+
+
+@router.callback_query(admin_kb.ManageSubscriptionCallback.filter(F.action == "renew"))
+async def process_subscription_action(query: CallbackQuery, callback_data: admin_kb.ManageSubscriptionCallback, state: FSMContext):
+    user_id = callback_data.user_id
+    months_to_add = callback_data.months
+
+    async with get_session() as session:
+        subscription = await crud.get_user_subscription(session, user_id)
+        
+        if subscription and subscription.end_date > datetime.now():
+            # Если подписка активна, продлеваем от даты окончания
+            new_end_date = subscription.end_date + relativedelta(months=months_to_add)
+        else:
+            # Если подписка истекла или ее нет, продлеваем от текущей даты
+            new_end_date = datetime.now() + relativedelta(months=months_to_add)
+
+        await crud.create_or_update_subscription(session, user_id, new_end_date)
+        await query.message.edit_text(f"Подписка для пользователя {user_id} успешно продлена.\n"
+                                     f"Новая дата окончания: {new_end_date.strftime('%d.%m.%Y')}")
+    await state.clear()
+    await query.answer()
 
 
 @router.message(ManageSubscription.get_end_date)
